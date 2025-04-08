@@ -1,17 +1,56 @@
 {
-  "name": "facebook-messenger-bot",
+  "name": "messenger-nexalosim-bot",
   "version": "1.0.0",
-  "description": "A Facebook Messenger bot using ws3-fca",
+  "description": "A robust Facebook Messenger bot built with ws3-fca for automated messaging, sim sim talk, funny commands, social media downloading, and update management.",
   "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20.17.0"
+  },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "start:pm2": "pm2 start pm2.config.js",
+    "stop:pm2": "pm2 stop bot",
+    "logs": "pm2 logs bot",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "ws3-fca": "^1.0.47",
-    "npmlog": "^7.0.0",
     "axios": "^1.6.0",
-    "chalk": "^4.1.2"
+    "chalk": "^4.1.2",
+    "moment": "^2.30.1",
+    "npmlog": "^7.0.0",
+    "ws3-fca": "^1.0.47",
+    "pm2": "^5.3.0"
   },
-  "author": "testing",
-  "license": "MIT"
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.2.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/1dev-hridoy/Messenger-NexaloSIM-Bot.git"
+  },
+  "homepage": "https://github.com/1dev-hridoy/Messenger-NexaloSIM-Bot#readme",
+  "bugs": {
+    "url": "https://github.com/1dev-hridoy/Messenger-NexaloSIM-Bot/issues"
+  },
+  "keywords": [
+    "facebook-messenger",
+    "bot",
+    "ws3-fca",
+    "messaging",
+    "social-media-downloader",
+    "automation",
+    "node.js"
+  ],
+  "author": {
+    "name": "Hridoy",
+    "email": "hridoyxqc@gmail.com",
+    "url": "https://github.com/1dev-hridoy"
+  },
+  "license": "MIT",
+  "private": false
 }
