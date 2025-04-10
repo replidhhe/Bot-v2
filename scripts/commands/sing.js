@@ -1,127 +1,132 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const chalk = require('chalk');
+const crypto = require('crypto');
+
+const YTSEARCH_API_URL = 'https://nexalo-api.vercel.app/api/ytsearch';
+const YTMP3DL_API_URL = 'https://nexalo-api.vercel.app/api/ytmp3dl';
 
 module.exports.config = {
   name: "sing",
-  aliases: ["song", "music"],
+  aliases: [],
   version: "1.0",
   author: "Hridoy",
-  countDown: 10,
+  countDown: 5,
   adminOnly: false,
-  description: "Fetches and sends an MP3 of a requested song",
-  category: "Media",
-  guide: "{pn} <song name>",
+  description: "Search and download a song as an MP3 file by its name 🎵",
+  category: "Music",
+  guide: "{pn}sing [music name] - Search and download a song as an MP3",
   usePrefix: true
 };
 
-module.exports.run = async function({ api, event, args, config }) {
-  const { threadID, messageID } = event;
-
-  // Validate input
-  if (!args.length) {
-    api.setMessageReaction("❌", messageID, () => {}, true);
-    return api.sendMessage("❌ Please provide a song name.\nUsage: !sing <song name>", threadID, messageID);
-  }
-
-  const query = encodeURIComponent(args.join(" "));
-  const apiUrl = `https://apis-rho-nine.vercel.app/ytsdlmp3?q=${query}`;
-  const filePath = path.join(__dirname, "ytsdlmp3.mp3");
+module.exports.run = async function({ api, event, args, getText }) {
+  const { threadID, messageID, senderID } = event;
 
   try {
-    // Set "processing" reaction
-    api.setMessageReaction("🕥", messageID, () => {}, true);
-
-    // Log the request
-    console.log(chalk.cyan(`[Sing] Fetching song: "${query}" | ThreadID: ${threadID}`));
-
-    // Fetch MP3 URL from the API with retry logic
-    let response;
-    let attempts = 0;
-    const maxAttempts = 3;
-    const retryDelay = 2000; // 2 seconds delay between retries
-
-    while (attempts < maxAttempts) {
-      try {
-        response = await axios.get(apiUrl, { timeout: 10000 }); // 10-second timeout
-        break;
-      } catch (err) {
-        attempts++;
-        if (attempts === maxAttempts) {
-          throw new Error(`Failed to fetch MP3 URL after ${maxAttempts} attempts: ${err.message}`);
-        }
-        console.log(chalk.yellow(`[Sing Retry] Attempt ${attempts}/${maxAttempts} failed: ${err.message}`));
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-      }
-    }
-
-    if (!response.data || !response.data.download_url) {
+    // Extract the music name from args
+    const musicName = args.join(' ').trim();
+    if (!musicName) {
       api.setMessageReaction("❌", messageID, () => {}, true);
-      return api.sendMessage("⚠️ No MP3 found for your query.", threadID, messageID);
+      return api.sendMessage(getText("sing", "missingMusicName"), threadID, messageID);
     }
 
-    const audioUrl = response.data.download_url;
-    const fileName = response.data.title || "audio.mp3";
-    console.log(chalk.cyan(`[Sing] Found song: ${fileName} | URL: ${audioUrl}`));
+    // Fetch the sender's name (for logging purposes only)
+    const userInfo = await new Promise((resolve, reject) => {
+      api.getUserInfo([senderID], (err, info) => {
+        if (err) reject(err);
+        else resolve(info);
+      });
+    });
+    const userName = userInfo[senderID]?.name || "Unknown User";
 
-    // Download the MP3 file
-    const audioResponse = await axios({
-      url: audioUrl,
-      method: "GET",
-      responseType: "stream",
-      timeout: 15000, // 15-second timeout for download
+    // Step 1: Search for the music using the first API
+    const searchUrl = `${YTSEARCH_API_URL}?query=${encodeURIComponent(musicName)}`;
+    const searchResponse = await axios.get(searchUrl, { timeout: 10000 });
+
+    // Validate search API response
+    if (!searchResponse.data || searchResponse.data.code !== 200 || !searchResponse.data.data || searchResponse.data.data.length === 0) {
+      throw new Error("No music found for the given query");
+    }
+
+    // Get the first video's details
+    const firstVideo = searchResponse.data.data[0];
+    const videoUrl = firstVideo.url;
+    const title = firstVideo.title;
+    const duration = firstVideo.duration;
+
+    // Step 2: Get the MP3 download URL using the second API
+    const downloadUrl = `${YTMP3DL_API_URL}?url=${encodeURIComponent(videoUrl)}`;
+    const downloadResponse = await axios.get(downloadUrl, { timeout: 10000 });
+
+    // Validate download API response
+    if (!downloadResponse.data || !downloadResponse.data.success || !downloadResponse.data.download_url) {
+      throw new Error("Failed to retrieve MP3 download URL");
+    }
+
+    const mp3DownloadUrl = downloadResponse.data.download_url;
+
+    // Create a temporary file path for the MP3
+    const tempDir = path.join(__dirname, '..', '..', 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    const fileName = `music_${crypto.randomBytes(8).toString('hex')}.mp3`;
+    const filePath = path.join(tempDir, fileName);
+
+    // Step 3: Download the MP3 file
+    const mp3Response = await axios.get(mp3DownloadUrl, {
+      responseType: 'stream',
+      timeout: 15000
     });
 
+    // Verify the content type to ensure it's an audio file
+    const contentType = mp3Response.headers['content-type'];
+    if (!contentType || !contentType.startsWith('audio/')) {
+      throw new Error("Downloaded content is not an audio file");
+    }
+
+    // Save the MP3 to a temporary file
     const writer = fs.createWriteStream(filePath);
+    mp3Response.data.pipe(writer);
 
-    // Handle file writing with a Promise
     await new Promise((resolve, reject) => {
-      audioResponse.data.pipe(writer);
-
-      writer.on("finish", () => {
-        console.log(chalk.green(`[Sing] Successfully downloaded: ${fileName}`));
-        resolve();
-      });
-
-      writer.on("error", (err) => {
-        console.log(chalk.red(`[Sing Error] Download failed: ${err.message}`));
-        reject(new Error(`Failed to download audio: ${err.message}`));
-      });
+      writer.on('finish', resolve);
+      writer.on('error', reject);
     });
 
-    // Send the audio file
+    // Check if the file is empty
+    const stats = fs.statSync(filePath);
+    if (stats.size === 0) throw new Error("Downloaded MP3 file is empty");
+
+    // Construct the message
     const msg = {
-      body: `🎵 Here is your requested song:\n📌 ${fileName}`,
-      attachment: fs.createReadStream(filePath),
+      body: getText("sing", "success", title, duration),
+      attachment: fs.createReadStream(filePath)
     };
 
+    // Send the message with the MP3 attachment
     await new Promise((resolve, reject) => {
       api.sendMessage(msg, threadID, (err) => {
-        if (err) {
-          console.log(chalk.red(`[Sing Error] Failed to send audio: ${err.message}`));
-          reject(new Error(`Failed to send audio: ${err.message}`));
-        } else {
-          console.log(chalk.green(`[Sing] Successfully sent: ${fileName}`));
-          resolve();
-        }
+        if (err) return reject(err);
+        api.setMessageReaction("🎵", messageID, () => {}, true);
+        resolve();
       }, messageID);
     });
 
-    // Set "success" reaction
-    api.setMessageReaction("✅", messageID, () => {}, true);
-
-    // Clean up the file
-    fs.unlink(filePath, (unlinkErr) => {
-      if (unlinkErr) {
-        console.log(chalk.red(`[Sing Error] Failed to delete file: ${unlinkErr.message}`));
-      } else {
-        console.log(chalk.green(`[Sing] Successfully deleted file: ${filePath}`));
-      }
-    });
-  } catch (error) {
-    console.log(chalk.red(`[Sing Error] Thread: ${threadID} | Error: ${error.message}`));
+    // Delete the temporary file after sending
+    fs.unlinkSync(filePath);
+    console.log(`[Sing Command] Downloaded "${title}" (${duration}) for ${userName}`);
+  } catch (err) {
+    console.error("[Sing Command Error]", err.message);
     api.setMessageReaction("❌", messageID, () => {}, true);
-    api.sendMessage(`⚠️ Could not fetch or send the audio. Error: ${error.message}`, threadID, messageID);
+    api.sendMessage(getText("sing", "error", err.message), threadID, messageID);
+
+    // Ensure the temporary file is deleted even if sending fails
+    const tempDir = path.join(__dirname, '..', '..', 'temp');
+    const fileName = `music_${crypto.randomBytes(8).toString('hex')}.mp3`;
+    const filePath = path.join(tempDir, fileName);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
   }
 };
