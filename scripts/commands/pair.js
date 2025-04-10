@@ -1,12 +1,8 @@
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
 
-const PAIR_API_URL = 'https://api.nexalo.xyz/pair';
-const API_KEY = 'na_3XAUB0VQ8C9010EK'; 
+const PAIR_API_URL = 'https://nexalo-api.vercel.app/api/pair';
 const GRAPH_API_BASE = 'https://graph.facebook.com';
-const FB_HARDCODED_TOKEN = '6628568379|c1e620fa708a1d5696fb991c1bde5662'; 
+const FB_HARDCODED_TOKEN = '6628568379|c1e620fa708a1d5696fb991c1bde5662';
 
 const pairQuotes = [
   "Two souls with but a single thought, two hearts that beat as one.",
@@ -21,7 +17,7 @@ const pairQuotes = [
 module.exports.config = {
   name: "pair",
   aliases: ["match", "couple"],
-  version: "1.0",
+  version: "1.1",
   author: "Hridoy",
   countDown: 5,
   adminOnly: false,
@@ -31,22 +27,15 @@ module.exports.config = {
   usePrefix: true
 };
 
-async function getProfilePictures(userIDs, size = [512, 512]) {
+async function getProfilePictureURL(userID, size = [512, 512]) {
   const [height, width] = size;
-  const results = {};
-
-  userIDs.forEach(userID => {
-    results[userID] = `${GRAPH_API_BASE}/${userID}/picture?width=${width}&height=${height}&access_token=${FB_HARDCODED_TOKEN}`;
-  });
-
-  return results;
+  return `${GRAPH_API_BASE}/${userID}/picture?width=${width}&height=${height}&access_token=${FB_HARDCODED_TOKEN}`;
 }
 
-module.exports.run = async function({ api, event, args, config }) {
+module.exports.run = async function({ api, event }) {
   const { threadID, messageID, senderID } = event;
 
   try {
-
     api.setMessageReaction("🕥", messageID, () => {}, true);
 
     const threadInfo = await new Promise((resolve, reject) => {
@@ -74,9 +63,8 @@ module.exports.run = async function({ api, event, args, config }) {
     const commandUserName = userInfo[senderID]?.name || "Unknown User";
     const randomUserName = userInfo[randomUserID]?.name || "Unknown User";
 
-    const profilePics = await getProfilePictures([senderID, randomUserID]);
-    const commandUserPic = profilePics[senderID];
-    const randomUserPic = profilePics[randomUserID];
+    const commandUserPic = await getProfilePictureURL(senderID);
+    const randomUserPic = await getProfilePictureURL(randomUserID);
 
     if (!commandUserPic || !randomUserPic) {
       api.setMessageReaction("❌", messageID, () => {}, true);
@@ -85,49 +73,42 @@ module.exports.run = async function({ api, event, args, config }) {
 
     console.log(`📸 Profile Pics:\n- Sender: ${commandUserPic}\n- Match: ${randomUserPic}`);
 
+    // Make API request to generate pair image
     const pairResponse = await axios.get(PAIR_API_URL, {
       params: {
         image1: commandUserPic,
-        image2: randomUserPic,
-        api: API_KEY
+        image2: randomUserPic
       },
-      responseType: 'stream',
       timeout: 10000
     });
 
-    const fileName = `paired_image_${crypto.randomBytes(8).toString('hex')}.jpg`;
-    const filePath = path.join(__dirname, fileName);
-    const writer = fs.createWriteStream(filePath);
+    if (pairResponse.data && pairResponse.data.status) {
+      const pairImageURL = pairResponse.data.url;
 
-    pairResponse.data.pipe(writer);
+      const randomQuote = pairQuotes[Math.floor(Math.random() * pairQuotes.length)];
 
-    await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
+      api.setMessageReaction("✅", messageID, () => {}, true);
+      const msg = {
+        body: `💘 Love alert!\n${commandUserName} just got paired with ${randomUserName}\n"${randomQuote}"`,
+        attachment: await axios({
+          url: pairImageURL,
+          method: "GET",
+          responseType: "stream"
+        }).then(res => res.data)
+      };
 
-    const stats = fs.statSync(filePath);
-    if (stats.size === 0) throw new Error("Downloaded image is empty 😬");
-
-    const randomQuote = pairQuotes[Math.floor(Math.random() * pairQuotes.length)];
-
-    api.setMessageReaction("✅", messageID, () => {}, true);
-    const msg = {
-      body: `💘 Love alert!\n${commandUserName} just got paired with ${randomUserName}\n"${randomQuote}"`,
-      attachment: fs.createReadStream(filePath)
-    };
-
-    api.sendMessage(msg, threadID, (err) => {
-      if (err) {
-        console.error("❌ Error sending image:", err);
-        api.sendMessage("Couldn't send the image, bro. Something broke.", threadID);
-      }
-
-      fs.unlink(filePath, (unlinkErr) => {
-        if (unlinkErr) console.error("❌ Couldn't delete image file:", unlinkErr);
-        else console.log(`🧽 Deleted file: ${filePath}`);
+      api.sendMessage(msg, threadID, (err) => {
+        if (err) {
+          console.error("❌ Error sending pair image:", err);
+          api.sendMessage("Couldn't send the image, bro. Something broke.", threadID);
+        }
       });
-    });
+
+    } else {
+      console.error("❌ Unexpected API response:", pairResponse.data);
+      api.setMessageReaction("❌", messageID, () => {}, true);
+      api.sendMessage("Failed to process the pair image. Try again later.", threadID, messageID);
+    }
 
   } catch (error) {
     console.error("❌ Something went wrong in pair command:", error);

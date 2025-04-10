@@ -5,19 +5,18 @@ const crypto = require('crypto');
 
 const GRAPH_API_BASE = 'https://graph.facebook.com';
 const FB_HARDCODED_TOKEN = '6628568379|c1e620fa708a1d5696fb991c1bde5662';
-const API_KEY = 'na_3XAUB0VQ8C9010EK';
-const LOVE_API_URL = 'https://api.nexalo.xyz/lovev1';
+const LOVE_API_URL = 'https://nexalo-api.vercel.app/api/lovev1';
 
 module.exports.config = {
   name: "love",
   aliases: [],
-  version: "1.0",
+  version: "1.3",
   author: "Hridoy",
   countDown: 5,
   adminOnly: false,
   description: "Create a cute love image with you and someone special 💖",
   category: "Fun",
-  guide: "{pn} love @user",
+  guide: "{pn}love @user",
   usePrefix: true
 };
 
@@ -26,69 +25,98 @@ function getProfilePictureURL(userID, size = [512, 512]) {
   return `${GRAPH_API_BASE}/${userID}/picture?width=${width}&height=${height}&access_token=${FB_HARDCODED_TOKEN}`;
 }
 
-module.exports.run = async function({ api, event }) {
+module.exports.run = async function({ api, event, getText }) {
   const { threadID, messageID, senderID, mentions } = event;
 
   try {
     const mentionIDs = Object.keys(mentions);
+
     if (mentionIDs.length === 0) {
-      return api.sendMessage("Tag someone to fall in love with, lonely simp 💔", threadID, messageID);
+      api.setMessageReaction("❌", messageID, () => {}, true);
+      return api.sendMessage(getText("love", "noMention"), threadID, messageID);
     }
 
     const targetID = mentionIDs[0];
-    const targetName = mentions[targetID];
+    // Clean the targetName to remove any extra spaces or special characters
+    const targetName = mentions[targetID].replace('@', '').trim();
 
     if (targetID === senderID) {
-      return api.sendMessage("You tryna fall in love with yourself? Narcissist energy 😩", threadID, messageID);
+      api.setMessageReaction("❌", messageID, () => {}, true);
+      return api.sendMessage(getText("love", "selfLove"), threadID, messageID);
     }
 
     const senderPic = getProfilePictureURL(senderID);
     const targetPic = getProfilePictureURL(targetID);
 
+    // Create a temporary file path for the image
+    const tempDir = path.join(__dirname, '..', '..', 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    const fileName = `love_${crypto.randomBytes(8).toString('hex')}.jpg`;
+    const filePath = path.join(tempDir, fileName);
+
+    // Make API request to get the love image directly
     const response = await axios.get(LOVE_API_URL, {
       params: {
-        api: API_KEY,
         image1: senderPic,
         image2: targetPic
       },
-      responseType: 'stream',
+      responseType: 'stream', // Treat the response as a binary stream
       timeout: 10000
     });
 
-    const fileName = `love_${crypto.randomBytes(8).toString('hex')}.jpg`;
-    const filePath = path.join(__dirname, fileName);
+    // Verify the content type to ensure it's an image
+    const contentType = response.headers['content-type'];
+    if (!contentType || !contentType.startsWith('image/')) {
+      throw new Error("API response is not an image");
+    }
+
+    // Save the image to a temporary file
     const writer = fs.createWriteStream(filePath);
     response.data.pipe(writer);
 
     await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
+      writer.on('finish', resolve);
+      writer.on('error', reject);
     });
 
+    // Ensure the targetName in the message body matches the mentions tag
+    const messageBody = getText("love", "success", `@${targetName}`);
+
+    // Send the image as an attachment
     const msg = {
-      body: `❤️ Love is in the air! ${mentions[targetID]} is now in a deep situationship with you 😘`,
+      body: messageBody,
       attachment: fs.createReadStream(filePath),
       mentions: [
         {
-          tag: mentions[targetID],
+          tag: `@${targetName}`,
           id: targetID
         }
       ]
     };
 
-    api.sendMessage(msg, threadID, (err) => {
-      if (err) {
-        console.error("❌ Error sending love image:", err);
-        api.sendMessage("❌", threadID, messageID);
-      }
-
-      fs.unlink(filePath, (unlinkErr) => {
-        if (unlinkErr) console.error("❌ Error deleting image file:", unlinkErr);
-      });
+    await new Promise((resolve, reject) => {
+      api.sendMessage(msg, threadID, (err) => {
+        if (err) return reject(err);
+        api.setMessageReaction("❤️", messageID, () => {}, true);
+        resolve();
+      }, messageID);
     });
 
+    // Delete the temporary file after sending
+    fs.unlinkSync(filePath);
   } catch (err) {
-    console.error("❌ Love command error:", err.message);
-    api.sendMessage("❌", threadID, messageID);
+    console.error("[Love Command Error]", err.message);
+    api.setMessageReaction("❌", messageID, () => {}, true);
+    api.sendMessage(getText("love", "error", err.message), threadID, messageID);
+
+    // Ensure the temporary file is deleted even if sending fails
+    const tempDir = path.join(__dirname, '..', '..', 'temp');
+    const fileName = `love_${crypto.randomBytes(8).toString('hex')}.jpg`;
+    const filePath = path.join(tempDir, fileName);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
   }
 };

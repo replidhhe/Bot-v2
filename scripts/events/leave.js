@@ -6,25 +6,29 @@ const crypto = require('crypto');
 
 const GRAPH_API_BASE = 'https://graph.facebook.com';
 const FB_HARDCODED_TOKEN = '6628568379|c1e620fa708a1d5696fb991c1bde5662';
+const GOODBYE_API_URL = 'https://nexalo-api.vercel.app/api/goodbye-card';
 
 function getProfilePictureURL(userID, size = [512, 512]) {
   const [height, width] = size;
   return `${GRAPH_API_BASE}/${userID}/picture?width=${width}&height=${height}&access_token=${FB_HARDCODED_TOKEN}`;
 }
 
+const shortQuotes = [
+  "Farewell, dear friend!",
+  "Wishing you the best!",
+  "Goodbye, take care!",
+  "Until we meet again!",
+  "Safe travels, friend!",
+  "Best of luck always!",
+  "See you soon, pal!",
+  "Keep shining, star!"
+];
+
 module.exports = {
   name: "leave",
   handle: async function({ api, event }) {
     const threadID = event.threadID;
     const leftUserID = event.logMessageData.leftParticipantFbId;
-
-    const goodbyeMessages = [
-      "👋 %1 has left the group. We’ll miss you!",
-      "😢 %1 just left us. Goodbye and take care!",
-      "🚪 %1 has departed. Wishing you the best!",
-      "🌟 %1 left the group. Farewell, friend!",
-      "👋 Goodbye %1! Thanks for being part of the group!"
-    ];
 
     try {
       const userInfo = await new Promise((resolve, reject) => {
@@ -37,11 +41,30 @@ module.exports = {
 
       const profilePicUrl = getProfilePictureURL(leftUserID);
 
-      const apiUrl = `https://api.nexalo.xyz/goodbye?api=na_3XAUB0VQ8C9010EK&name=${encodeURIComponent(userName)}&text=GoodBye&image=${encodeURIComponent(profilePicUrl)}`;
-      const response = await axios.get(apiUrl, { responseType: 'stream' });
+      // Select a random short quote
+      const randomQuote = shortQuotes[Math.floor(Math.random() * shortQuotes.length)];
 
+      // Construct the API URL with the new parameters
+      const apiUrl = `${GOODBYE_API_URL}?image=${encodeURIComponent(profilePicUrl)}&username=${encodeURIComponent(userName)}&text=${encodeURIComponent(randomQuote)}`;
+
+      // Download the goodbye image
+      const response = await axios.get(apiUrl, { responseType: 'stream', timeout: 10000 });
+
+      // Verify the content type to ensure it's an image
+      const contentType = response.headers['content-type'];
+      if (!contentType || !contentType.startsWith('image/')) {
+        throw new Error("API response is not an image");
+      }
+
+      // Create a temporary file path for the image
+      const tempDir = path.join(__dirname, '..', '..', 'temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
       const fileName = `goodbye_${crypto.randomBytes(8).toString('hex')}.png`;
-      const filePath = path.join(__dirname, '..', '..', fileName);
+      const filePath = path.join(tempDir, fileName);
+
+      // Save the image to a temporary file
       const writer = fs.createWriteStream(filePath);
       response.data.pipe(writer);
 
@@ -50,33 +73,38 @@ module.exports = {
         writer.on('error', reject);
       });
 
+      // Check if the file is empty
       const stats = fs.statSync(filePath);
       if (stats.size === 0) throw new Error("Downloaded goodbye image is empty");
 
-      const randomMessage = goodbyeMessages[Math.floor(Math.random() * goodbyeMessages.length)]
-        .replace("%1", userName);
-
+      // Construct the message
       const msg = {
-        body: randomMessage,
+        body: `👋 ${userName} has left the group.`,
         attachment: fs.createReadStream(filePath)
       };
 
-      api.sendMessage(msg, threadID, (err) => {
-        if (err) {
-          console.log(chalk.red(`[Leave Event Error] Failed to send goodbye message: ${err.message}`));
-        }
-
-        fs.unlink(filePath, (unlinkErr) => {
-          if (unlinkErr) {
-            console.log(chalk.red(`[Leave Event Cleanup Error] ${unlinkErr.message}`));
-          } else {
-            console.log(chalk.cyan(`[Leave Event] ${userName} left Thread: ${threadID}`));
-          }
+      // Send the message
+      await new Promise((resolve, reject) => {
+        api.sendMessage(msg, threadID, (err) => {
+          if (err) return reject(err);
+          resolve();
         });
       });
+
+      // Delete the temporary file after sending
+      fs.unlinkSync(filePath);
+      console.log(chalk.cyan(`[Leave Event] ${userName} left Thread: ${threadID}`));
     } catch (error) {
       api.sendMessage(`⚠️ Failed to send goodbye message.`, threadID);
       console.log(chalk.red(`[Leave Event Error] ${error.message}`));
+
+      // Ensure the temporary file is deleted even if sending fails
+      const tempDir = path.join(__dirname, '..', '..', 'temp');
+      const fileName = `goodbye_${crypto.randomBytes(8).toString('hex')}.png`;
+      const filePath = path.join(tempDir, fileName);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
     }
   }
 };

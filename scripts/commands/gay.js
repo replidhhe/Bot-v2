@@ -1,12 +1,10 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 
 const GRAPH_API_BASE = 'https://graph.facebook.com';
 const FB_HARDCODED_TOKEN = '6628568379|c1e620fa708a1d5696fb991c1bde5662';
-const GAY_API_URL = 'https://api.nexalo.xyz/gay';
-const API_KEY = 'na_3XAUB0VQ8C9010EK';
+const GAY_API_URL = 'https://nexalo-api.vercel.app/api/gay';
 
 module.exports.config = {
   name: "gay",
@@ -43,47 +41,59 @@ module.exports.run = async function({ api, event }) {
     const response = await axios.get(GAY_API_URL, {
       params: {
         imageurl: imageURL,
-        api: API_KEY
       },
-      responseType: 'stream',
       timeout: 10000
     });
 
-    const fileName = `gay_${crypto.randomBytes(8).toString('hex')}.jpg`;
-    const filePath = path.join(__dirname, fileName);
-    const writer = fs.createWriteStream(filePath);
+    if (response.data && response.data.status) {
+      const gayImageURL = response.data.url;
 
-    response.data.pipe(writer);
+      const fileName = `gay_${path.basename(gayImageURL)}`;
+      const filePath = path.join(__dirname, fileName);
 
-    await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
-
-    const msg = {
-      body: `🌈 Look I found a certified gay: ${targetName} 😂`,
-      attachment: fs.createReadStream(filePath),
-      mentions: [
-        {
-          tag: targetName,
-          id: targetID
-        }
-      ]
-    };
-
-    api.sendMessage(msg, threadID, (err) => {
-      if (err) {
-        console.error("❌ Error sending image:", err);
-        api.sendMessage("❌", threadID, messageID);
-      }
-
-      fs.unlink(filePath, (unlinkErr) => {
-        if (unlinkErr) console.error("❌ Error deleting image file:", unlinkErr);
+      const imageResponse = await axios.get(gayImageURL, {
+        responseType: 'stream',
+        timeout: 10000
       });
-    });
+
+      const writer = fs.createWriteStream(filePath);
+
+      imageResponse.data.pipe(writer);
+
+      await new Promise((resolve, reject) => {
+        writer.on("finish", resolve);
+        writer.on("error", reject);
+      });
+
+      const msg = {
+        body: `🌈 Look I found a certified gay: ${targetName} 😂`,
+        attachment: fs.createReadStream(filePath),
+        mentions: [
+          {
+            tag: targetName,
+            id: targetID
+          }
+        ]
+      };
+
+      api.sendMessage(msg, threadID, (err) => {
+        if (err) {
+          console.error("❌ Error sending image:", err);
+          api.sendMessage("❌", threadID, messageID);
+        }
+
+        fs.unlink(filePath, (unlinkErr) => {
+          if (unlinkErr) console.error("❌ Error deleting image file:", unlinkErr);
+        });
+      });
+
+    } else {
+      console.error("❌ Unexpected API response:", response.data);
+      api.sendMessage("❌ Failed to process the image.", threadID, messageID);
+    }
 
   } catch (error) {
     console.error("❌ Error in gay command:", error.message);
-    api.sendMessage("❌", threadID, messageID);
+    api.sendMessage("❌ An error occurred while processing your request.", threadID, messageID);
   }
 };

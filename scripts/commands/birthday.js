@@ -1,17 +1,13 @@
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
 
 const GRAPH_API_BASE = 'https://graph.facebook.com';
 const FB_HARDCODED_TOKEN = '6628568379|c1e620fa708a1d5696fb991c1bde5662';
-const API_KEY = 'na_3XAUB0VQ8C9010EK';
-const API_URL = 'https://api.nexalo.xyz/wish-birthday';
+const API_URL = 'https://nexalo-api.vercel.app/api/birthday';
 
 module.exports.config = {
   name: "birthday",
   aliases: ["bday", "wish"],
-  version: "1.0",
+  version: "1.1",
   author: "Hridoy",
   countDown: 5,
   adminOnly: false,
@@ -27,7 +23,7 @@ function getProfilePictureURL(userID, size = [512, 512]) {
 }
 
 module.exports.run = async function({ api, event }) {
-  const { threadID, messageID, senderID, mentions } = event;
+  const { threadID, messageID, mentions } = event;
 
   try {
     const mentionIDs = Object.keys(mentions);
@@ -36,55 +32,50 @@ module.exports.run = async function({ api, event }) {
     }
 
     const targetID = mentionIDs[0];
-    const rawName = mentions[targetID]; 
-    const cleanName = rawName.replace(/^@/, ""); 
-
+    const rawName = mentions[targetID];
+    const cleanName = rawName.replace(/^@/, "");
     const profilePicURL = getProfilePictureURL(targetID);
 
+    // Make API call to generate birthday wish image
     const response = await axios.get(API_URL, {
       params: {
-        image: profilePicURL,
         name: cleanName,
-        api: API_KEY
+        image: profilePicURL
       },
-      responseType: 'stream',
       timeout: 10000
     });
 
-    const fileName = `bday_${crypto.randomBytes(8).toString('hex')}.jpg`;
-    const filePath = path.join(__dirname, fileName);
-    const writer = fs.createWriteStream(filePath);
-    response.data.pipe(writer);
+    if (response.data && response.data.status) {
+      const birthdayImageURL = response.data.url;
 
-    await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
+      const msg = {
+        body: `🎉 Happy Birthday ${rawName}! Hope it's lit AF 🎂💖`,
+        attachment: await axios({
+          url: birthdayImageURL,
+          method: "GET",
+          responseType: "stream"
+        }).then(res => res.data),
+        mentions: [
+          {
+            tag: rawName,
+            id: targetID
+          }
+        ]
+      };
 
-    const msg = {
-      body: `🎉 Happy Birthday ${rawName}! Hope it's lit AF 🎂💖`,
-      attachment: fs.createReadStream(filePath),
-      mentions: [
-        {
-          tag: rawName,
-          id: targetID
+      api.sendMessage(msg, threadID, (err) => {
+        if (err) {
+          console.error("❌ Error sending birthday image:", err);
+          api.sendMessage("❌", threadID, messageID);
         }
-      ]
-    };
-
-    api.sendMessage(msg, threadID, (err) => {
-      if (err) {
-        console.error("❌ Error sending birthday image:", err);
-        api.sendMessage("❌", threadID, messageID);
-      }
-
-      fs.unlink(filePath, (unlinkErr) => {
-        if (unlinkErr) console.error("❌ Error deleting file:", unlinkErr);
       });
-    });
+    } else {
+      console.error("❌ Unexpected API response:", response.data);
+      api.sendMessage("❌ Failed to process the birthday wish image.", threadID, messageID);
+    }
 
   } catch (err) {
     console.error("❌ Birthday command error:", err.message);
-    api.sendMessage("❌", threadID, messageID);
+    api.sendMessage("❌ An error occurred while processing your request.", threadID, messageID);
   }
 };
