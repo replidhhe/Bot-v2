@@ -20,7 +20,7 @@ module.exports.config = {
   countDown: 5,
   adminOnly: false,
   description: "Add a Palestine frame with the text '__Free_Palestine__' to your profile picture or a mentioned user's picture 🇵🇸",
-  category: "Fun",
+  category: "Support",
   guide: "{pn}palestine2 [@user] - Add a Palestine frame to your or a mentioned user's profile picture",
   usePrefix: true
 };

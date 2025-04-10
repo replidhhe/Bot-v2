@@ -20,7 +20,7 @@ module.exports.config = {
   countDown: 5,
   adminOnly: false,
   description: "Generate a Palestine-themed image 🇵🇸 with your profile picture or a mentioned user's picture",
-  category: "Fun",
+  category: "Support",
   guide: "{pn}palestine3 [@user] - Generate a Palestine image using your or a mentioned user's profile picture",
   usePrefix: true
 };
