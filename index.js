@@ -111,40 +111,22 @@ async function checkForUpdates() {
     if (!lastCommitSha) {
       lastCommitSha = currentCommitSha;
       console.log(chalk.green('[Update Check] Initial commit SHA:', lastCommitSha));
-      return;
+      return { isUpdateAvailable: false, commit: null };
     }
 
     if (lastCommitSha !== currentCommitSha) {
       console.log(chalk.green('[Update Check] New commit detected:', currentCommitSha));
       lastCommitSha = currentCommitSha;
-
-      const threadList = await new Promise((resolve, reject) => {
-        api.getThreadList(100, null, ["INBOX"], (err, list) => {
-          if (err) reject(err);
-          else resolve(list);
-        });
-      });
-
-      const groupThreads = threadList.filter(thread => thread.isGroup);
-      const notificationTime = moment().format("hh:mm A");
-      const notificationDate = moment().format("MMMM DD, YYYY");
-
-      const updateMessage = getText("updater", "updateAvailable", globalConfig.prefix, notificationTime, notificationDate);
-
-      for (const group of groupThreads) {
-        api.sendMessage(updateMessage, group.threadID, (err) => {
-          if (err) console.error(`Failed to send update notification to thread ${group.threadID}: ${err.message}`);
-        });
-      }
+      return { isUpdateAvailable: true, commit: lastCommit };
     } else {
       console.log(chalk.blue('[Update Check] No new updates available.'));
+      return { isUpdateAvailable: false, commit: null };
     }
   } catch (error) {
     console.error(chalk.red('[Update Check Error]', error.message));
+    throw error;
   }
 }
-
-setInterval(checkForUpdates, 5 * 60 * 1000);
 
 fca({ appState }, (err, fcaApi) => {
   if (err) {
@@ -155,9 +137,6 @@ fca({ appState }, (err, fcaApi) => {
   api = fcaApi; // Assign the API instance to the outer scope
 
   console.log(chalk.hex('#00FFFF')(`🌟 ${chalkGradient(`${globalConfig.botName} is Online!`)} 🌟`));
-
-  // Run the initial update check after the API is initialized
-  checkForUpdates();
 
   api.listenMqtt((err, event) => {
     if (err) {
