@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const moment = require('moment');
+const chalk = require('chalk'); // Add chalk import
 const execPromise = util.promisify(exec);
 
 module.exports.config = {
@@ -23,7 +24,7 @@ module.exports.run = async function({ api, event, args, config, getText }) {
   const { threadID, messageID } = event;
 
   try {
-    // Function to check for updates (imported from index.js)
+    // Function to check for updates
     const checkForUpdates = async () => {
       let lastCommitSha = null;
       try {
