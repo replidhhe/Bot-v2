@@ -1,45 +1,42 @@
+
 # Messenger-NexaloSIM-Bot
 
-![GitHub stars](https://img.shields.io/github/stars/1dev-hridoy/Messenger-NexaloSIM-Bot) ![GitHub forks](https://img.shields.io/github/forks/1dev-hridoy/Messenger-NexaloSIM-Bot) ![GitHub issues](https://img.shields.io/github/issues/1dev-hridoy/Messenger-NexaloSIM-Bot)
+![GitHub stars](https://img.shields.io/github/stars/1dev-hridoy/Messenger-NexaloSIM-Bot) ![GitHub forks](https://img.shields.io/github/forks/1dev-hridoy/Messenger-NexaloSIM-Bot) ![GitHub issues](https://img.shields.io/github/issues/1dev-hridoy/Messenger-NexaloSIM-Bot) ![License](https://img.shields.io/github/license/1dev-hridoy/Messenger-NexaloSIM-Bot)
 
-A Node.js-based Facebook Messenger bot using the `ws3-fca` package, integrated with the Nexalo SIM API for custom AI-driven features. This bot supports a command system with a configurable prefix, processes messages in real-time via MQTT, and includes error handling and colorful logging with `chalk`.
+A feature-rich Facebook Messenger bot built with `ws3-fca`, designed to provide a variety of commands and utilities for group chats. The bot includes a web dashboard to monitor its status, uptime, and console logs in real-time.
+
+## Table of Contents
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Web Dashboard](#web-dashboard)
+- [Commands](#commands)
+- [Creating a New Command](#creating-a-new-command)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
+- [Changelog](#changelog)
 
 ## Features
-
-- **Command System**: Dynamic command loading with a prefix (default: `!`).
-- **Nexalo SIM Integration**: Custom AI-powered chat and training capabilities.
-- **Media Support**: Fetch and send MP3 songs with the `sing` command.
-- **Utility Commands**: Includes `ping`, `uptime`, `help`, and `remove` commands.
-- **Error Handling**: Robust error handling with retries for network issues.
-- **Logging**: Colorful console logs using `chalk` for better debugging.
-
-## Project Structure
-
-```
-Messenger-NexaloSIM-Bot/
-├── commands/           # Command files
-│   ├── chat.js         # Chat with Nexalo SIM API
-│   ├── teach.js        # Train the Nexalo SIM API
-│   ├── ping.js         # Check bot latency
-│   ├── sing.js         # Fetch and send MP3 songs
-│   ├── uptime.js       # Display server info
-│   ├── help.js         # List commands or show command details
-│   └── remove.js       # Remove bot messages
-├── config.json         # Bot configuration (prefix, bot name, admin UIDs)
-├── appState.json       # Facebook login cookies (not included)
-├── index.js            # Main entry point
-├── package.json        # Dependencies and scripts
-└── temp_image.jpg      # Temporary file for image downloads
-```
+- **Interactive Commands**: Over 30 commands for fun, utility, and media generation (e.g., `sing`, `copilot`, `fbcover`, `palestine`, etc.).
+- **Event Handling**: Supports group events like member joins and leaves with customizable messages.
+- **Social Media Downloader**: Download media from social platforms (handled by the `socialMediaDownloader` event).
+- **Web Dashboard**: Monitor the bot’s status, uptime, and console logs in real-time via a web interface.
+- **Multi-Language Support**: Supports multiple languages with a configurable language file.
+- **Auto-Update Check**: Automatically checks for updates from the GitHub repository.
+- **Customizable Prefix**: Configure the bot’s command prefix via `config.json`.
+- **Admin-Only Commands**: Restrict certain commands to admin users.
 
 ## Prerequisites
-
-- **Node.js**: Version 14.x or higher.
-- **Facebook Account**: For generating `appState.json`.
-- **Nexalo SIM API Key**: For AI features (`chat` and `teach` commands).
+- **Node.js**: Version 20.17.0 or higher.
+- **PM2**: Process manager for running the bot in the background.
+- **Facebook Account**: A Facebook account to log in and generate an `appState.json` file.
+- **Server Access**: A server (local or virtual) to host the bot and web dashboard.
+- **Port Access**: Ensure port `28140` (or your configured port) is open for the web dashboard.
 
 ## Installation
-
 1. **Clone the Repository**:
    ```bash
    git clone https://github.com/1dev-hridoy/Messenger-NexaloSIM-Bot.git
@@ -51,150 +48,188 @@ Messenger-NexaloSIM-Bot/
    npm install
    ```
 
-3. **Generate `appState.json`**:
-   Use a tool like fbstate to generate `appState.json` with your Facebook login cookies.
-   Place the `appState.json` file in the project root.
-
-4. **Configure the Bot**:
-   Edit `config.json` to set your bot’s name, prefix, and admin UIDs:
-   ```json
-   {
-     "botName": "MyBot",
-     "prefix": "!",
-     "adminName": "AdminUser",
-     "adminUIDs": ["your-facebook-uid"]
-   }
-   ```
-
-5. **Set Nexalo SIM API Key**:
-   Replace `MAINPOINT` in `commands/chat.js` and `commands/teach.js` with your actual Nexalo SIM API key.
-
-6. **Run the Bot**:
+3. **Install PM2 Globally** (if not already installed):
    ```bash
-   npm start
+   npm install -g pm2
    ```
 
-## Usage
-The bot listens for messages in Messenger and responds to commands starting with the prefix (default: `!`).
-Example: `!sing happy birthday` fetches and sends an MP3 of the song "Happy Birthday".
+4. **Generate `appState.json`**:
+   - Log in to your Facebook account using a tool like `facebook-chat-api` or a similar method to generate an `appState.json` file.
+   - Place the `appState.json` file in the project root directory.
 
-### Available Commands
+5. **Configure the Bot**:
+   - See the [Configuration](#configuration) section below to set up `config.json`.
 
-| Command | Aliases      | Description                         | Usage                        | Category |
-|---------|--------------|-------------------------------------|------------------------------|----------|
-| chat    | talk, sim    | Chat with the Nexalo SIM API        | `!chat <question>`           | AI       |
-| teach   | train, learn | Train the Nexalo SIM API            | `!teach <question> | <answer>` | Training |
-| ping    | pong, latency| Check the bot's response time       | `!ping`                      | Utility  |
-| sing    | song, music  | Fetch and send an MP3 of a song     | `!sing <song name>`          | Media    |
-| uptime  | status, server| Display server info and uptime      | `!uptime`                    | Utility  |
-| help    | commands, cmd| List all commands or show details   | `!help [command name]`       | Utility  |
-| remove  | delete       | Remove a bot message (reply to it)  | `!remove (reply to msg)`     | Utility  |
+6. **Start the Bot**:
+   ```bash
+   pm2 start index.js --name bot
+   ```
 
 ## Configuration
+The bot’s configuration is managed via the `config.json` file in the project root. Below is an example configuration:
 
-### `config.json`:
-- `botName`: Name of your bot.
-- `prefix`: Command prefix (e.g., `!`).
-- `adminName`: Name of the admin.
-- `adminUIDs`: Array of Facebook UIDs allowed to use admin-only commands.
+```json
+{
+  "botName": "NexaloSIM-Bot",
+  "prefix": ".",
+  "language": "en",
+  "adminUIDs": ["your-facebook-uid-here"]
+}
+```
 
-### Nexalo SIM API Key:
-Replace `MAINPOINT` in `chat.js` and `teach.js` with your API key.
+- **`botName`**: The name of your bot (displayed in logs and messages).
+- **`prefix`**: The command prefix (e.g., `.help`).
+- **`language`**: The language code for messages (e.g., `en` for English). Language files are located in the `languages` directory.
+- **`adminUIDs`**: An array of Facebook user IDs allowed to use admin-only commands.
 
-## Troubleshooting
+### Language Files
+Language files are located in the `languages` directory (e.g., `en.lang`). You can add new languages by creating a new `.lang` file and updating the `language` field in `config.json`.
 
-### Bot Not Responding:
-- Ensure `appState.json` is valid and not expired.
-- Check if the bot has permissions in the chat.
-- Verify the prefix in `config.json` matches your command (default: `!`).
+## Usage
+1. **Start the Bot**:
+   ```bash
+   pm2 start index.js --name bot
+   ```
 
-### API Errors:
-- If the `sing` command fails, the API (https://apis-rho-nine.vercel.app/ytsdlmp3) might be down. Check the console logs for details.
-- For `chat` or `teach`, ensure your Nexalo SIM API key is correct.
+2. **Check Bot Status**:
+   ```bash
+   pm2 list
+   ```
 
-### File Permission Issues:
-- Ensure the bot has write permissions for the `commands/` directory to download files (e.g., MP3s, images).
+3. **View Logs**:
+   ```bash
+   pm2 logs bot
+   ```
+
+4. **Interact with the Bot**:
+   - Add the bot to a Facebook Messenger group.
+   - Use commands by typing the prefix followed by the command name (e.g., `.help`).
+
+5. **Access the Web Dashboard**:
+   - Open your browser and navigate to `http://<your-server-ip>:28140` (e.g., `http://ip.ozima.cloud:28140`).
+   - The dashboard will display the bot’s status, uptime, and console logs in real-time.
+
+## Web Dashboard
+The bot includes a web dashboard to monitor its status:
+- **Status**: Shows whether the bot is `running` or `stopped`.
+- **Uptime**: Displays the bot’s uptime in hours, minutes, and seconds.
+- **Console Logs**: Streams console logs in real-time, with color-coded entries for `log` (white), `error` (red), and `warn` (yellow).
+
+### Accessing the Dashboard
+- Ensure the bot is running.
+- Navigate to `http://<your-server-ip>:28140`.
+- If the port is not accessible, check your server’s firewall settings and ensure port `28140` is open:
+  ```bash
+  sudo ufw allow 28140
+  ```
+
+## Commands
+Here are some of the available commands (use `.help` in a chat to see the full list):
+
+| Command       | Description                          | Usage Example      |
+|---------------|--------------------------------------|--------------------|
+| `.help`       | Displays the list of commands        | `.help`            |
+| `.sing`       | Plays a song in the chat             | `.sing`            |
+| `.copilot`    | AI assistant for answering questions | `.copilot`         |
+| `.fbcover`    | Generates a Facebook cover image     | `.fbcover1`        |
+| `.palestine`  | Creates a Palestine-themed image     | `.palestine1`      |
+| `.ping`       | Checks the bot’s response time       | `.ping`            |
+| `.uptime`     | Shows the bot’s uptime               | `.uptime`          |
+
+### Admin-Only Commands
+Some commands are restricted to admin users (defined in `config.json` under `adminUIDs`).
+
+## Creating a New Command
+You can easily add new commands to the bot by creating a new JavaScript file in the `scripts/commands` directory. Below is an example of how to create a simple `hello` command that responds with a greeting.
+
+### Step 1: Create the Command File
+1. Navigate to the `scripts/commands` directory.
+2. Create a new file named `hello.js`.
+3. Add the following code to `hello.js`:
+
+```javascript
+module.exports.config = {
+  name: "hello",
+  aliases: ["hi"],
+  version: "1.0",
+  author: "YourName",
+  countDown: 0,
+  adminOnly: false,
+  description: "A simple command to greet the user",
+  category: "General",
+  guide: "{pn}hello - Say hello to the bot",
+  usePrefix: true
+};
+
+module.exports.run = async function({ api, event, getText }) {
+  const { threadID, messageID } = event;
+  try {
+    api.sendMessage("Hello! How can I assist you today? 😊", threadID, messageID);
+  } catch (err) {
+    console.error("[Hello Command Error]", err.message);
+    api.sendMessage(getText("hello", "error", err.message), threadID, messageID);
+  }
+};
+```
+
+### Step 2: Update the Language File
+The `hello` command uses the `getText` function for error messages. You need to add the corresponding text to the language file.
+
+1. Open the `languages/en.lang` file.
+2. Add the following line:
+   ```
+   hello.error=⚠️ An error occurred: %1
+   ```
+3. Save the file.
+
+### Step 3: Test the Command
+1. Restart the bot to load the new command:
+   ```bash
+   pm2 restart bot
+   ```
+2. In a Facebook Messenger group, type:
+   ```
+   .hello
+   ```
+3. The bot should respond with:
+   ```
+   Hello! How can I assist you today? 😊
+   ```
+
+### Command Structure
+- **`config`**: Defines the command’s metadata (name, aliases, description, etc.).
+  - `name`: The command name (e.g., `hello`).
+  - `aliases`: Alternative names for the command (e.g., `hi`).
+  - `adminOnly`: Set to `true` to restrict the command to admins.
+  - `usePrefix`: Set to `true` to require the bot’s prefix (e.g., `.hello`).
+- **`run`**: The function that executes when the command is called.
+  - `api`: The `ws3-fca` API for interacting with Facebook Messenger.
+  - `event`: The event object containing message details (e.g., `threadID`, `messageID`).
+  - `getText`: A function to retrieve localized text from the language file.
+
+You can create more complex commands by following this structure and adding your desired functionality.
 
 ## Contributing
-
 Contributions are welcome! To contribute:
-
 1. Fork the repository.
 2. Create a new branch (`git checkout -b feature/your-feature`).
-3. Make your changes and commit (`git commit -m "Add your feature"`).
+3. Make your changes and commit them (`git commit -m "Add your feature"`).
 4. Push to your branch (`git push origin feature/your-feature`).
 5. Open a pull request.
 
-Please ensure your code follows the existing style and includes appropriate error handling.
+Please ensure your code follows the project’s coding style and includes appropriate documentation.
 
 ## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-## Acknowledgments
-
-- Built with `ws3-fca` for Facebook Messenger integration.
-- Uses Nexalo SIM API for custom AI features.
-- Colorful logging with `chalk`.
+This project is licensed under the ISC License. See the [LICENSE](LICENSE) file for details.
 
 ## Contact
+For questions, suggestions, or issues, feel free to reach out:
+- **GitHub Issues**: [Open an issue](https://github.com/1dev-hridoy/Messenger-NexaloSIM-Bot/issues)
+- **Email**: hridoyxqc@gmail.com
 
-For issues or suggestions, open an issue on GitHub or contact the maintainer:
-
-- Hridoy - [GitHub Profile](https://github.com/1dev-hridoy)
-
-Happy chatting with your bot! 🎉
-
----
-
-### Explanation of the README
-1. **Header and Badges**:
-   - Added GitHub badges for stars, forks, and issues to make the repo look professional.
-   - Included a brief description of the bot.
-
-2. **Features**:
-   - Highlighted key features like the command system, Nexalo SIM integration, and media support.
-
-3. **Project Structure**:
-   - Listed the main files and their purposes to help users understand the codebase.
-
-4. **Installation**:
-   - Provided step-by-step instructions for setting up the bot, including generating `appState.json` and configuring the API key.
-
-5. **Usage**:
-   - Explained how to use the bot and listed all available commands in a table format for clarity.
-
-6. **Configuration**:
-   - Detailed how to configure `config.json` and the Nexalo SIM API key.
-
-7. **Troubleshooting**:
-   - Added common issues and solutions to help users debug problems.
-
-8. **Contributing**:
-   - Included guidelines for contributing to encourage community involvement.
-
-9. **License and Acknowledgments**:
-   - Added a placeholder for the MIT License (you can create a `LICENSE` file if needed).
-   - Acknowledged the libraries used in the project.
-
-10. **Contact**:
-    - Provided a way for users to reach out for support.
+## Changelog
+See the [CHANGELOG.md](CHANGELOG.md) file for a detailed history of changes and updates to the project.
 
 ---
 
-### How to Add to Your Repository
-1. Create a file named `README.md` in the root of your repository.
-2. Copy and paste the content above into `README.md`.
-3. Commit and push the file to your GitHub repository:
-   ```bash
-   git add README.md
-   git commit -m "Add README.md"
-   git push origin main
-   ```
-
-Visit https://github.com/1dev-hridoy/Messenger-NexaloSIM-Bot/ to see the updated README.
-
-### Additional Suggestions
-- **Add a License File**: If you want to use the MIT License, create a LICENSE file with the MIT License text.
-- **Screenshots**: You could add screenshots of the bot in action (e.g., the help command output) to make the README more visually appealing.
-- **CI/CD Badges**: If you set up automated tests or deployment, add badges for those workflows.
+Happy chatting with Messenger-NexaloSIM-Bot! 🚀
