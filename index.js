@@ -5,6 +5,9 @@ const moment = require('moment');
 const fca = require('ws3-fca');
 const axios = require('axios');
 const { execSync } = require('child_process');
+const express = require('express');
+const { WebSocketServer } = require('ws');
+const pm2 = require('pm2');
 
 let globalConfig;
 let appState;
@@ -24,7 +27,7 @@ try {
 }
 
 const langCode = globalConfig.language || 'en';
-const pathLanguageFile = path.join(__dirname, 'languages', `${langCode}.lang`);
+let pathLanguageFile = path.join(__dirname, 'languages', `${langCode}.lang`);
 
 if (!fs.existsSync(pathLanguageFile)) {
   console.warn(`Can't find language file ${langCode}, using default language file "en.lang"`);
@@ -54,6 +57,135 @@ function getText(head, key, ...args) {
   for (let i = args.length - 1; i >= 0; i--) text = text.replace(new RegExp(`%${i + 1}`, 'g'), args[i]);
   return text;
 }
+
+// Bot start time for uptime calculation
+const startTime = Date.now();
+
+// Set up Express web server
+const app = express();
+let PORT = process.env.PORT || 28140; // Default to 28140 for ip.ozima.cloud:28140
+const MAX_PORT_ATTEMPTS = 5; // Try up to 5 ports if the default is in use
+
+// Serve static files (HTML, CSS, JS)
+app.use(express.static(path.join(__dirname, 'public')));
+
+
+async function startServer(attempt = 0) {
+  try {
+    const server = await new Promise((resolve, reject) => {
+      const serverInstance = app.listen(PORT, () => {
+        console.log(`[Index] Web server running on port ${PORT}`);
+        resolve(serverInstance);
+      }).on('error', (err) => {
+        if (err.code === 'EADDRINUSE' && attempt < MAX_PORT_ATTEMPTS) {
+          console.warn(`[Index] Port ${PORT} is in use, trying port ${PORT + 1}...`);
+          PORT++;
+          startServer(attempt + 1).then(resolve).catch(reject);
+        } else {
+          reject(err);
+        }
+      });
+    });
+
+
+    const wss = new WebSocketServer({ server });
+
+    // Store console logs
+    const logs = [];
+
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    const originalConsoleWarn = console.warn;
+
+    function broadcastLog(message, type = 'log') {
+      const logEntry = { type, message: `[${new Date().toISOString()}] ${message}`, timestamp: Date.now() };
+      logs.push(logEntry);
+ 
+      if (logs.length > 100) logs.shift();
+
+      wss.clients.forEach(client => {
+        if (client.readyState === 1) { 
+          client.send(JSON.stringify({ type: 'log', data: logEntry }));
+        }
+      });
+    }
+
+    console.log = (...args) => {
+      const message = args.join(' ');
+      broadcastLog(message, 'log');
+      originalConsoleLog.apply(console, args);
+    };
+
+    console.error = (...args) => {
+      const message = args.join(' ');
+      broadcastLog(message, 'error');
+      originalConsoleError.apply(console, args);
+    };
+
+    console.warn = (...args) => {
+      const message = args.join(' ');
+      broadcastLog(message, 'warn');
+      originalConsoleWarn.apply(console, args);
+    };
+
+
+    wss.on('connection', (ws) => {
+      console.log('[WebSocket] Client connected');
+
+
+      async function checkBotStatus(retries = 3, delay = 1000) {
+        return new Promise((resolve) => {
+          pm2.connect((err) => {
+            if (err) {
+              console.error('[PM2] Failed to connect:', err.message);
+              resolve({ status: 'running', uptime: Math.floor((Date.now() - startTime) / 1000) });
+              return;
+            }
+
+            pm2.describe('bot', (err, description) => {
+              pm2.disconnect();
+              if (err || !description || description.length === 0) {
+                console.error('[PM2] Failed to get bot status:', err ? err.message : 'No process found');
+                if (retries > 0) {
+                  console.log(`[PM2] Retrying (${retries} attempts left)...`);
+                  setTimeout(() => {
+                    checkBotStatus(retries - 1, delay).then(resolve);
+                  }, delay);
+                } else {
+               
+                  const uptime = Math.floor((Date.now() - startTime) / 1000);
+                  resolve({ status: 'running', uptime });
+                }
+              } else {
+                const status = description[0].pm2_env.status === 'online' ? 'running' : 'stopped';
+                const uptime = Math.floor((Date.now() - startTime) / 1000);
+                resolve({ status, uptime });
+              }
+            });
+          });
+        });
+      }
+
+      // Send initial data (status, uptime, logs)
+      checkBotStatus().then(({ status, uptime }) => {
+        ws.send(JSON.stringify({ type: 'status', data: { status, uptime } }));
+      });
+
+      // Send all existing logs
+      ws.send(JSON.stringify({ type: 'logs', data: logs }));
+    });
+
+    wss.on('close', () => {
+      console.log('[WebSocket] Client disconnected');
+    });
+  } catch (err) {
+    console.error('[Index] Failed to start web server:', err.message);
+    process.exit(1);
+  }
+}
+
+// Start the web server
+startServer();
 
 const commands = new Map();
 const events = new Map();
@@ -134,7 +266,7 @@ fca({ appState }, (err, fcaApi) => {
     return;
   }
 
-  api = fcaApi; // Assign the API instance to the outer scope
+  api = fcaApi;
 
   console.log(chalk.hex('#00FFFF')(`🌟 ${chalkGradient(`${globalConfig.botName} is Online!`)} 🌟`));
 

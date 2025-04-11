@@ -18,3 +18,7 @@ noti.format=🌟══════✨ NOTIFICATION ✨══════🌟\n�
 
 # General messages
 general.adminOnly=🚫 This command is for admins only.
+
+unsend.missingReply=⚠️ Please reply to a bot message to unsend it!
+unsend.notBotMessage=⚠️ You can only unsend bot messages!
+unsend.error=❌ Failed to unsend the message: %1
