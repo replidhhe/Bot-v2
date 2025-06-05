@@ -1,10 +1,6 @@
 {
-    "iconUnsend": {
-        "status": true,
-        "icon": "😠"
-    {
     "botName": "The kimg is back 🔙😾",
-    "prefix": "-",
+    "prefix": ".",
     "adminName": "Rahad",
     "adminUIDs": ["61574627006558", "1000yyyyyy"]
-    }
+}
