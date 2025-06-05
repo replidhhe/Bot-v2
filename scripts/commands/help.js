@@ -4,7 +4,7 @@ module.exports.config = {
   name: "help",
   aliases: ["commands", "cmd"],
   version: "1.0",
-  author: "Hridoy",
+  author: "Rahad",
   countDown: 5,
   adminOnly: false,
   description: "Displays a list of commands or detailed info about a specific command",
@@ -34,7 +34,7 @@ module.exports.run = async function({ api, event, args, config }) {
         msg += `\n╭──── [ ${category.toUpperCase()} ]\n│ ✧${categories[category].commands.sort().join(" ✧ ")}\n╰───────────────◊`;
       });
 
-      msg += `\n\n╭─『 ${config.botName || "NexaloSim"} 』\n╰‣ Total commands: ${commands.size}\n╰‣ Page 1 of 1\n╰‣ A personal Messenger bot ✨\n╰‣ ADMIN: Hridoy`;
+      msg += `\n\n╭─『 ${config.botName || "NexaloSim"} 』\n╰‣ Total commands: ${commands.size}\n╰‣ Page 1 of 1\n╰‣ A personal Messenger bot ✨\n╰‣ ADMIN: 💤📿𝐑𝐚𝐡𝐚𝐝 📿💤`;
 
       api.sendMessage(msg, threadID, messageID);
       console.log(chalk.cyan(`[Help] Full command list requested | ThreadID: ${threadID}`));
@@ -61,7 +61,7 @@ module.exports.run = async function({ api, event, args, config }) {
 │ Access: ${c.adminOnly ? "Admin Only" : "All Users"}
 │ Cooldown: ${c.countDown || 1}s
 │ Category: ${c.category || "Uncategorized"}
-│ Author: ${c.author || "Hridoy"}
+│ Author: ${c.author || "💤📿𝐑𝐚𝐡𝐚𝐝 📿💤"}
 ├── Usage
 │ ${usage}
 ├── Notes
